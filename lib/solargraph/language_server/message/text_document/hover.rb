@@ -1,7 +1,13 @@
 require 'uri'
 require 'htmlentities'
 
+# inline audrey experiments
+require 'redis'
+require 'oj'
+
 module Solargraph::LanguageServer::Message::TextDocument
+  SAMPLES = Redis.new.smembers('audrey_samples').map { |sample_json| Oj.load(sample_json) }
+
   class Hover < Base
     def process
       filename = uri_to_file(params['textDocument']['uri'])
@@ -20,7 +26,19 @@ module Solargraph::LanguageServer::Message::TextDocument
         parts.push pin.documentation unless pin.documentation.nil? or pin.documentation.empty?
         contents.push parts.join("\n\n") unless parts.empty?
         last_link = this_link unless this_link.nil?
+
+        if pin.is_a?(Solargraph::Pin::Method)
+          root_node_id = pin.path
+          root_node_id = "Object#{root_node_id}" if root_node_id.start_with? '#'
+
+          contents.push("### Examples parameters")
+          pin.parameters.each do |param|
+            sample = SAMPLES.select { |s| s['rootNodeId'] == root_node_id && s['identifier'] == param }.sample
+            contents.push("#{param}: #{sample['value']}") if sample
+          end
+        end
       end
+
       set_result(
         contents: {
           kind: 'markdown',
