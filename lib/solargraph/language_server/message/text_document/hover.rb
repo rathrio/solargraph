@@ -2,12 +2,10 @@ require 'uri'
 require 'htmlentities'
 
 # inline audrey experiments
-require 'redis'
+require 'http'
 require 'oj'
 
 module Solargraph::LanguageServer::Message::TextDocument
-  SAMPLES = Redis.new.smembers('audrey_samples').map { |sample_json| Oj.load(sample_json) }
-
   class Hover < Base
     def process
       filename = uri_to_file(params['textDocument']['uri'])
@@ -33,7 +31,15 @@ module Solargraph::LanguageServer::Message::TextDocument
 
           contents.push("### Examples parameters")
           pin.parameters.each do |param|
-            sample = SAMPLES.select { |s| s['rootNodeId'] == root_node_id && s['identifier'] == param }.sample
+            sample = HTTP.get(
+              'http://localhost:9292/samples',
+              params: {
+                identifier: param,
+                category: 'ARGUMENT',
+                root_node_id: root_node_id,
+                source: filename
+              }
+            ).parse.sample
             contents.push("#{param}: #{sample['value']}") if sample
           end
         end
